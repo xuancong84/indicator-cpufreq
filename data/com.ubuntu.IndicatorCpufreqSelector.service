@@ -1,0 +1,4 @@
+[D-BUS Service]
+Name=com.ubuntu.IndicatorCpufreqSelector
+Exec=/usr/bin/indicator-cpufreq-selector
+User=root

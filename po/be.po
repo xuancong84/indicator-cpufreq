@@ -1,0 +1,83 @@
+# Belarusian translation for indicator-cpufreq
+# Copyright (c) 2013 Rosetta Contributors and Canonical Ltd 2013
+# This file is distributed under the same license as the indicator-cpufreq package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2013.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: indicator-cpufreq\n"
+"Report-Msgid-Bugs-To: FULL NAME <EMAIL@ADDRESS>\n"
+"POT-Creation-Date: 2013-02-25 23:19+0700\n"
+"PO-Revision-Date: 2013-03-01 07:23+0000\n"
+"Last-Translator: Vitaly Danilovich <Unknown>\n"
+"Language-Team: Belarusian <be@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Launchpad-Export-Date: 2013-03-02 05:05+0000\n"
+"X-Generator: Launchpad (build 16514)\n"
+
+#: ../indicator-cpufreq.desktop.in.h:1
+msgid "CPU Frequency Scaling Indicator"
+msgstr "Індыкатар частаты працэсара"
+
+#: ../indicator-cpufreq.desktop.in.h:2
+msgid "An indicator for monitoring and switching CPU frequency scaling"
+msgstr "Індыкатар для адлюстравання і пераключэння частаты працэсара"
+
+#. Support for command line options.
+#: ../bin/indicator-cpufreq.py:60
+msgid "indicator-cpufreq [options]"
+msgstr ""
+
+#: ../bin/indicator-cpufreq.py:63
+msgid "print the maximum debugging info (implies -vv)"
+msgstr ""
+
+#: ../bin/indicator-cpufreq.py:65
+msgid "set error_level output to warning, info, and then debug"
+msgstr "усталяваць error_level output на warning, info і затым debug"
+
+#: ../bin/indicator-cpufreq.py:67
+msgid "show the frequency with text along with the icon"
+msgstr "паказваць значэнне частоты побач са значком"
+
+#: ../indicator_cpufreq/com.ubuntu.indicatorcpufreq.policy.in.h:1
+msgid "Change CPU frequency scaling"
+msgstr "Змена частаты працэсара"
+
+#: ../indicator_cpufreq/com.ubuntu.indicatorcpufreq.policy.in.h:2
+msgid "System policy prevents you from changing CPU frequency scaling."
+msgstr "Сістэмная палітыка перашкаджае змене частоты працэсара."
+
+#. temp hack for properly displaying intel turbo mode (actual freq + 1000kHz)
+#: ../indicator_cpufreq/indicator.py:34
+#, python-format
+msgid "%s GHz"
+msgstr "%s ГГц"
+
+#: ../indicator_cpufreq/indicator.py:34
+#, python-format
+msgid "%.2f"
+msgstr "%.2f"
+
+#: ../indicator_cpufreq/indicator.py:36
+msgid "(turbo mode)"
+msgstr ""
+
+#: ../indicator_cpufreq/indicator.py:40
+msgid "Conservative"
+msgstr ""
+
+#: ../indicator_cpufreq/indicator.py:41
+msgid "Ondemand"
+msgstr "Дынамічны"
+
+#. 'userspace': _("Userspace"),
+#: ../indicator_cpufreq/indicator.py:43
+msgid "Powersave"
+msgstr "Энергазберажэнне"
+
+#: ../indicator_cpufreq/indicator.py:44
+msgid "Performance"
+msgstr "Прадукцыйнасць"

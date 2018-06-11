@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+
+ <!-- To the extent possible under law, David D. Lowe has waived all 
+ copyright and related or neighboring rights to this file.
+ License: http://creativecommons.org/publicdomain/zero/1.0/ -->
+
+<policyconfig>
+
+  <vendor>IndicatorCpufreq</vendor>
+  <vendor_url>https://launchpad.net/indicator-cpufreq</vendor_url>
+  <icon_name>indicator-cpufreq</icon_name>
+
+  <action id="com.ubuntu.indicatorcpufreqselector.setfrequencyscaling">
+    <_description>Change CPU frequency scaling</_description>
+    <_message>System policy prevents you from changing CPU frequency scaling.</_message>
+
+    <defaults>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+  </action>
+</policyconfig>

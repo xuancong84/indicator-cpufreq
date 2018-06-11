@@ -1,0 +1,87 @@
+# Brazilian Portuguese translation for indicator-cpufreq
+# Copyright (c) 2013 Rosetta Contributors and Canonical Ltd 2013
+# This file is distributed under the same license as the indicator-cpufreq package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2013.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: indicator-cpufreq\n"
+"Report-Msgid-Bugs-To: FULL NAME <EMAIL@ADDRESS>\n"
+"POT-Creation-Date: 2013-02-25 23:19+0700\n"
+"PO-Revision-Date: 2013-02-26 14:20+0000\n"
+"Last-Translator: Rafael Neri <Unknown>\n"
+"Language-Team: Brazilian Portuguese <pt_BR@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Launchpad-Export-Date: 2013-02-27 04:56+0000\n"
+"X-Generator: Launchpad (build 16506)\n"
+
+#: ../indicator-cpufreq.desktop.in.h:1
+msgid "CPU Frequency Scaling Indicator"
+msgstr "Indicador de escala de frequência da CPU"
+
+#: ../indicator-cpufreq.desktop.in.h:2
+msgid "An indicator for monitoring and switching CPU frequency scaling"
+msgstr "Um indicador para monitorar e alternar a escala de frequência da CPU"
+
+#. Support for command line options.
+#: ../bin/indicator-cpufreq.py:60
+msgid "indicator-cpufreq [options]"
+msgstr "indicator-cpufreq [opções]"
+
+#: ../bin/indicator-cpufreq.py:63
+msgid "print the maximum debugging info (implies -vv)"
+msgstr "Exibe o máximo de informações de depuração (implica -w)"
+
+#: ../bin/indicator-cpufreq.py:65
+msgid "set error_level output to warning, info, and then debug"
+msgstr ""
+"Definir a saída de \"error_level\" para \"warning\" ou \"info\" e em seguida "
+"depurar"
+
+#: ../bin/indicator-cpufreq.py:67
+msgid "show the frequency with text along with the icon"
+msgstr "mostra a frequência com texto e ícone"
+
+#: ../indicator_cpufreq/com.ubuntu.indicatorcpufreq.policy.in.h:1
+msgid "Change CPU frequency scaling"
+msgstr "Alterar a escala de frequência da CPU"
+
+#: ../indicator_cpufreq/com.ubuntu.indicatorcpufreq.policy.in.h:2
+msgid "System policy prevents you from changing CPU frequency scaling."
+msgstr ""
+"A política de segurança do sistema impede que você altere a escala de "
+"freqüência da CPU."
+
+#. temp hack for properly displaying intel turbo mode (actual freq + 1000kHz)
+#: ../indicator_cpufreq/indicator.py:34
+#, python-format
+msgid "%s GHz"
+msgstr "%s GHz"
+
+#: ../indicator_cpufreq/indicator.py:34
+#, python-format
+msgid "%.2f"
+msgstr "%.2f"
+
+#: ../indicator_cpufreq/indicator.py:36
+msgid "(turbo mode)"
+msgstr "(modo turbo)"
+
+#: ../indicator_cpufreq/indicator.py:40
+msgid "Conservative"
+msgstr "Moderado"
+
+#: ../indicator_cpufreq/indicator.py:41
+msgid "Ondemand"
+msgstr "Sob demanda"
+
+#. 'userspace': _("Userspace"),
+#: ../indicator_cpufreq/indicator.py:43
+msgid "Powersave"
+msgstr "Economia de energia"
+
+#: ../indicator_cpufreq/indicator.py:44
+msgid "Performance"
+msgstr "Desempenho"

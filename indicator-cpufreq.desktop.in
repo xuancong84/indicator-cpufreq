@@ -1,0 +1,6 @@
+[Desktop Entry]
+_Name=CPU Frequency Scaling Indicator
+_Comment=An indicator for monitoring and switching CPU frequency scaling
+Exec=indicator-cpufreq
+Type=Application
+Icon=indicator-cpufreq-50
