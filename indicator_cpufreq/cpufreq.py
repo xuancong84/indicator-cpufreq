@@ -20,39 +20,39 @@ from ctypes.util import find_library
 _libcpufreq = cdll.LoadLibrary(find_library("cpufreq"))
 
 class _cpufreq_policy(Structure):
-    _fields_ = [
-        ("min", c_ulong),
-        ("max", c_ulong),
-        ("governor", c_char_p)]
+	_fields_ = [
+		("min", c_ulong),
+		("max", c_ulong),
+		("governor", c_char_p)]
 
 class _cpufreq_available_governors(Structure):
-    pass
+	pass
 _cpufreq_available_governors._fields_ = [
-    ("governor", c_char_p),
-    ("next", POINTER(_cpufreq_available_governors)),
-    ("first", POINTER(_cpufreq_available_governors))]
+	("governor", c_char_p),
+	("next", POINTER(_cpufreq_available_governors)),
+	("first", POINTER(_cpufreq_available_governors))]
 
 class _cpufreq_available_frequencies(Structure):
-    pass
+	pass
 _cpufreq_available_frequencies._fields_ = [
-    ("frequency", c_ulong),
-    ("next", POINTER(_cpufreq_available_frequencies)),
-    ("first", POINTER(_cpufreq_available_frequencies))]
+	("frequency", c_ulong),
+	("next", POINTER(_cpufreq_available_frequencies)),
+	("first", POINTER(_cpufreq_available_frequencies))]
 
 class _cpufreq_affected_cpus(Structure):
-    pass
+	pass
 _cpufreq_affected_cpus._fields_ = [
-    ("cpu", c_uint),
-    ("next", POINTER(_cpufreq_affected_cpus)),
-    ("first", POINTER(_cpufreq_affected_cpus))]
+	("cpu", c_uint),
+	("next", POINTER(_cpufreq_affected_cpus)),
+	("first", POINTER(_cpufreq_affected_cpus))]
 
 class _cpufreq_stats(Structure):
-    pass
+	pass
 _cpufreq_stats._fields_ = [
-    ("frequency", c_ulong),
-    ("time_in_state", c_ulonglong),
-    ("next", POINTER(_cpufreq_stats)),
-    ("first", POINTER(_cpufreq_stats))]
+	("frequency", c_ulong),
+	("time_in_state", c_ulonglong),
+	("next", POINTER(_cpufreq_stats)),
+	("first", POINTER(_cpufreq_stats))]
 
 ###############################################################################
 
@@ -118,91 +118,131 @@ _libcpufreq.cpufreq_set_frequency.argtypes = [c_uint, c_ulong]
 _libcpufreq.cpufreq_set_frequency.restype = c_int
 
 def cpu_exists(cpu):
-    return _libcpufreq.cpufreq_cpu_exists(cpu)
+	return _libcpufreq.cpufreq_cpu_exists(cpu)
 
 def get_freq_kernel(cpu):
-    return _libcpufreq.cpufreq_get_freq_kernel(cpu)
+	return _libcpufreq.cpufreq_get_freq_kernel(cpu)
 
 def get_freq_hardware(cpu):
-    return _libcpufreq.cpufreq_get_freq_hardware(cpu)
+	return _libcpufreq.cpufreq_get_freq_hardware(cpu)
 
 def get_transition_latency(cpu):
-    return _libcpufreq.cpufreq_get_transition_latency(cpu)
+	return _libcpufreq.cpufreq_get_transition_latency(cpu)
 
 def get_hardware_limits(cpu):
-    min = c_ulong()
-    max = c_ulong()
-    _libcpufreq.cpufreq_get_hardware_limits(cpu, byref(min), byref(max))
-    return (min.value, max.value)
+	min = c_ulong()
+	max = c_ulong()
+	_libcpufreq.cpufreq_get_hardware_limits(cpu, byref(min), byref(max))
+	return (min.value, max.value)
 
 def get_driver(cpu):
-    return _libcpufreq.cpufreq_get_driver(cpu).decode()
+	return _libcpufreq.cpufreq_get_driver(cpu).decode()
 
 def get_policy(cpu):
-    p = _libcpufreq.cpufreq_get_policy(cpu)
-    policy = (p.contents.min, p.contents.max, p.contents.governor.decode())
-    _libcpufreq.cpufreq_put_policy(p)
-    return policy
+	p = _libcpufreq.cpufreq_get_policy(cpu)
+	policy = (p.contents.min, p.contents.max, p.contents.governor.decode())
+	_libcpufreq.cpufreq_put_policy(p)
+	return policy
 
 def _marshall_structs(first, field, decode=False):
-    values = []
-    p = first
-    while p:
-        if decode:
-            values.append(getattr(p.contents, field).decode())
-        else:
-            values.append(getattr(p.contents, field))
-        p = p.contents.next
-    return values
+	values = []
+	p = first
+	while p:
+		if decode:
+			values.append(getattr(p.contents, field).decode())
+		else:
+			values.append(getattr(p.contents, field))
+		p = p.contents.next
+	return values
 
 def get_available_governors(cpu):
-    structs = _libcpufreq.cpufreq_get_available_governors(cpu)
-    values = _marshall_structs(structs, 'governor', decode=True)
-    _libcpufreq.cpufreq_put_available_governors(structs)
-    return values
+	structs = _libcpufreq.cpufreq_get_available_governors(cpu)
+	values = _marshall_structs(structs, 'governor', decode=True)
+	_libcpufreq.cpufreq_put_available_governors(structs)
+	return values
 
 def get_available_frequencies(cpu):
-    structs = _libcpufreq.cpufreq_get_available_frequencies(cpu)
-    values = _marshall_structs(structs, 'frequency')
-    _libcpufreq.cpufreq_put_available_frequencies(structs)
-    return values
+	structs = _libcpufreq.cpufreq_get_available_frequencies(cpu)
+	values = _marshall_structs(structs, 'frequency')
+	_libcpufreq.cpufreq_put_available_frequencies(structs)
+	return values
 
 def get_affected_cpus(cpu):
-    structs = _libcpufreq.cpufreq_get_affected_cpus(cpu)
-    values = _marshall_structs(structs, 'cpu')
-    _libcpufreq.cpufreq_put_affected_cpus(structs)
-    return values
+	structs = _libcpufreq.cpufreq_get_affected_cpus(cpu)
+	values = _marshall_structs(structs, 'cpu')
+	_libcpufreq.cpufreq_put_affected_cpus(structs)
+	return values
 
 def get_related_cpus(cpu):
-    structs = _libcpufreq.cpufreq_get_related_cpus(cpu)
-    values = _marshall_structs(structs, 'cpu')
-    _libcpufreq.cpufreq_put_related_cpus(structs)
-    return values
+	structs = _libcpufreq.cpufreq_get_related_cpus(cpu)
+	values = _marshall_structs(structs, 'cpu')
+	_libcpufreq.cpufreq_put_related_cpus(structs)
+	return values
 
 def get_stats(cpu):
-    total_time = c_ulonglong()
-    p = _libcpufreq.cpufreq_get_stats(cpu, byref(total_time))
-    stats = []
-    while p:
-        stats.append((p.contents.frequency, p.contents.time_in_state))
-        p = p.contents.next
-    _libcpufreq.cpufreq_put_stats(p)
-    return total_time.value, stats
+	total_time = c_ulonglong()
+	p = _libcpufreq.cpufreq_get_stats(cpu, byref(total_time))
+	stats = []
+	while p:
+		stats.append((p.contents.frequency, p.contents.time_in_state))
+		p = p.contents.next
+	_libcpufreq.cpufreq_put_stats(p)
+	return total_time.value, stats
 
 def get_transitions(cpu):
-    return _libcpufreq.cpufreq_get_transitions(cpu)
+	return _libcpufreq.cpufreq_get_transitions(cpu)
 
 def set_policy(cpu, min, max, governor):
-    return _libcpufreq.cpufreq_set_policy(cpu, _cpufreq_policy(min, max, governor))
+	return _libcpufreq.cpufreq_set_policy(cpu, _cpufreq_policy(min, max, governor))
 
 def modify_policy_min(cpu, min_freq):
-    return _libcpufreq.cpufreq_modify_policy_min(cpu, min_freq)
+	return _libcpufreq.cpufreq_modify_policy_min(cpu, min_freq)
 
 def modify_policy_min(cpu, max_freq):
-    return _libcpufreq.cpufreq_modify_policy_max(cpu, max_freq)
+	return _libcpufreq.cpufreq_modify_policy_max(cpu, max_freq)
 
 def modify_policy_governor(cpu, governor):
-    return _libcpufreq.cpufreq_modify_policy_governor(cpu, governor.encode())
+	return _libcpufreq.cpufreq_modify_policy_governor(cpu, governor.encode())
 
 def set_frequency(cpu, target_frequency):
-    return _libcpufreq.cpufreq_set_frequency(cpu, target_frequency)
+	return _libcpufreq.cpufreq_set_frequency(cpu, target_frequency)
+
+def get_maxcpu():
+	maxcpu = 0
+	while cpu_exists(maxcpu) == 0:
+		maxcpu += 1
+	return maxcpu
+
+def get_available_frequencies2(cpu):
+	f_min, f_max = get_hardware_limits(0)
+	out = list(range(f_min, f_max, 100000))+[f_max]
+	try:
+		val = int(open('/sys/devices/system/cpu/intel_pstate/turbo_pct').read().strip())
+		ratio = (val+100)/100.0
+		max_limit = f_max / ratio
+		out = [v for v in out if v<=max_limit]
+	except:
+		pass
+	return list(set(out))
+
+def set_frequency2(cpu, freq):
+	try:
+		for i in range(get_maxcpu()):
+			with open('/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq'%i,'w') as fp:
+				print(freq, file=fp, flush=True)
+		return 0
+	except:
+		return -1
+
+def get_frequency(cpu):
+	try:
+		with open('/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq'%cpu) as fp:
+			return int(fp.read().strip())
+	except:
+		pass
+	return -1
+
+if not get_available_frequencies(0):
+	get_available_frequencies = get_available_frequencies2
+	set_frequency = set_frequency2
+	get_freq_hardware = get_freq_kernel = get_frequency
