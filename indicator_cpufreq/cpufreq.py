@@ -216,13 +216,6 @@ def get_maxcpu():
 def get_available_frequencies2(cpu):
 	f_min, f_max = get_hardware_limits(0)
 	out = list(range(f_min, f_max, 100000))+[f_max]
-	try:
-		val = int(open('/sys/devices/system/cpu/intel_pstate/turbo_pct').read().strip())
-		ratio = (val+100)/100.0
-		max_limit = f_max / ratio
-		out = [v for v in out if v<=max_limit]
-	except:
-		pass
 	return list(set(out))
 
 def set_frequency2(cpu, freq):

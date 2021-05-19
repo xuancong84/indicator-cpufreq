@@ -20,7 +20,7 @@ from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import AppIndicator3 as appindicator
 
-import locale
+import locale, os, sys
 import dbus
 
 from indicator_cpufreq import cpufreq
@@ -69,11 +69,11 @@ class MyIndicator(object):
 		maxcpu = 0
 		while cpufreq.cpu_exists(maxcpu) == 0:
 			maxcpu += 1
-		self.cpus = range(maxcpu)
+		self.cpus = list(range(maxcpu))
 		
 		# frequency menu items
 		#freqs = cpufreq.get_available_frequencies(self.cpus[0])
-		freqs = reversed(sorted(set(cpufreq.get_available_frequencies(self.cpus[0]))))
+		freqs = list(reversed(sorted(set(cpufreq.get_available_frequencies2(self.cpus[0])))))
 		for freq in freqs:
 			menu_item = Gtk.RadioMenuItem.new_with_label(group, readable_frequency(freq))
 			group = menu_item.get_group()
