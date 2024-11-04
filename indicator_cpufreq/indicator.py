@@ -23,7 +23,7 @@ from gi.repository import GLib
 from gi.repository import Gtk
 from gi.repository import AppIndicator3 as appindicator
 
-import locale, os, sys
+import os, sys
 import dbus
 
 from indicator_cpufreq import cpufreq
@@ -34,7 +34,7 @@ from gettext import gettext as _
 
 def readable_frequency(f):
 	# temp hack for properly displaying intel turbo mode (actual freq + 1000kHz)
-	label = _("%s GHz") % locale.format(_("%.2f"), f / 1.0e6)
+	label = "%.2f GHz" % (f / 1.0e6)
 	if f % 10000 != 0:
 		label = label + " " + _("(turbo mode)")
 	return label
