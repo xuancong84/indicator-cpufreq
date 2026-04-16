@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#! /usr/bin/python3
 # -*- Mode: Python; coding: utf-8; indent-tabs-mode: nil; tab-width: 4 -*-
 #
 # Copyright (C) 2010 Artem Popov <artfwo@gmail.com>
@@ -18,6 +18,7 @@
 
 from gi.repository import GLib
 
+import psutil, subprocess
 import dbus.service
 import dbus.mainloop.glib
 
@@ -28,96 +29,107 @@ class PermissionDeniedByPolicy(dbus.DBusException):
 
 class IndicatorCpufreqSelector(dbus.service.Object):
 
-    DBUS_INTERFACE_NAME = 'com.ubuntu.IndicatorCpufreqSelector'
+	DBUS_INTERFACE_NAME = 'com.ubuntu.IndicatorCpufreqSelector'
 
-    def __init__(self, bus, path):
-        dbus.service.Object.__init__(self, bus, path)
+	def __init__(self, bus, path):
+		dbus.service.Object.__init__(self, bus, path)
 
-        # cached D-BUS interfaces for _check_polkit_privilege()
-        self.dbus_info = None
-        self.polkit = None
-        self.main_loop = None
+		# cached D-BUS interfaces for _check_polkit_privilege()
+		self.dbus_info = None
+		self.polkit = None
+		self.main_loop = None
 
-        self.enforce_polkit = True
-        self._package_operation_in_progress = False
+		self.enforce_polkit = True
+		self._package_operation_in_progress = False
 
-    @dbus.service.method(dbus_interface='com.ubuntu.IndicatorCpufreqSelector',
-        in_signature='auu',
-        out_signature='',
-        sender_keyword='sender',
-        connection_keyword='conn')
-    def SetFrequency(self, cpus, frequency, sender=None, conn=None):
-        self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setfrequencyscaling')
-        for cpu in cpus:
-            error = cpufreq.set_frequency(cpu, frequency)
+	@dbus.service.method(dbus_interface='com.ubuntu.IndicatorCpufreqSelector',
+		in_signature='auu',
+		out_signature='',
+		sender_keyword='sender',
+		connection_keyword='conn')
+	def SetFrequency(self, cpus, frequency, sender=None, conn=None):
+		pl = self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setfrequencyscaling')
+		for cpu in cpus:
+			error = cpufreq.set_frequency(cpu, frequency)
 
-    @dbus.service.method(dbus_interface='com.ubuntu.IndicatorCpufreqSelector',
-        in_signature='aus',
-        out_signature='',
-        sender_keyword='sender',
-        connection_keyword='conn')
-    def SetGovernor(self, cpus, governor, sender=None, conn=None):
-        self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setfrequencyscaling')
-        for cpu in cpus:
-            error = cpufreq.modify_policy_governor(cpu, governor)
+	@dbus.service.method(dbus_interface='com.ubuntu.IndicatorCpufreqSelector',
+		in_signature='aus',
+		out_signature='',
+		sender_keyword='sender',
+		connection_keyword='conn')
+	def SetGovernor(self, cpus, governor, sender=None, conn=None):
+		self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setfrequencyscaling')
+		for cpu in cpus:
+			error = cpufreq.modify_policy_governor(cpu, governor)
 
-    def _check_polkit_privilege(self, sender, conn, privilege):
-        '''Verify that sender has a given PolicyKit privilege.
+	def _check_polkit_privilege(self, sender, conn, privilege):
+		'''Verify that sender has a given PolicyKit privilege.
 
-        sender is the sender's (private) D-BUS name, such as ":1:42"
-        (sender_keyword in @dbus.service.methods). conn is
-        the dbus.Connection object (connection_keyword in
-        @dbus.service.methods). privilege is the PolicyKit privilege string.
+		sender is the sender's (private) D-BUS name, such as ":1:42"
+		(sender_keyword in @dbus.service.methods). conn is
+		the dbus.Connection object (connection_keyword in
+		@dbus.service.methods). privilege is the PolicyKit privilege string.
 
-        This method returns if the caller is privileged, and otherwise throws a
-        PermissionDeniedByPolicy exception.
-        '''
-        if sender is None and conn is None:
-            # called locally, not through D-BUS
-            return
-        if not self.enforce_polkit:
-            # that happens for testing purposes when running on the session
-            # bus, and it does not make sense to restrict operations here
-            return
+		This method returns if the caller is privileged, and otherwise throws exception.
+		'''
+		if sender is None and conn is None:
+			# called locally, not through D-BUS
+			return
+		if not self.enforce_polkit:
+			# that happens for testing purposes when running on the session
+			# bus, and it does not make sense to restrict operations here
+			return
 
-        # get peer PID
-        if self.dbus_info is None:
-            self.dbus_info = dbus.Interface(conn.get_object('org.freedesktop.DBus',
-                '/org/freedesktop/DBus/Bus', False), 'org.freedesktop.DBus')
-        pid = self.dbus_info.GetConnectionUnixProcessID(sender)
+		# get peer PID
+		if self.dbus_info is None:
+			self.dbus_info = dbus.Interface(conn.get_object('org.freedesktop.DBus',
+				'/org/freedesktop/DBus/Bus', False), 'org.freedesktop.DBus')
+		pid = self.dbus_info.GetConnectionUnixProcessID(sender)
 
-        # query PolicyKit
-        if self.polkit is None:
-            self.polkit = dbus.Interface(dbus.SystemBus().get_object(
-                'org.freedesktop.PolicyKit1',
-                '/org/freedesktop/PolicyKit1/Authority', False),
-                'org.freedesktop.PolicyKit1.Authority')
-        try:
-            # we don't need is_challenge return here, since we call with AllowUserInteraction
-            (is_auth, _, details) = self.polkit.CheckAuthorization(
-                    ('unix-process', {'pid': dbus.UInt32(pid, variant_level=1),
-                        'start-time': dbus.UInt64(0, variant_level=1)}), 
-                    privilege, {'': ''}, dbus.UInt32(1), '', timeout=600)
-        except dbus.DBusException as e:
-            if e._dbus_error_name == 'org.freedesktop.DBus.Error.ServiceUnknown':
-                # polkitd timed out, connect again
-                self.polkit = None
-                return self._check_polkit_privilege(sender, conn, privilege)
-            else:
-                raise
+		# check passwordless sudo
+		try:
+			process = psutil.Process(pid)
+			username = process.username()
+			output = subprocess.check_output(['sudo', '-l', '-U', username]).decode().replace(' ', '')
+			if 'NOPASSWD:ALL' in output:	# passwordless sudoer -> allow
+				return
+			if '(ALL:ALL)ALL' not in output:	# not sudoer -> deny
+				raise PermissionDeniedByPolicy("Non-sudoers are not authorized to change CPU frequency!")
+		except (psutil.NoSuchProcess, psutil.AccessDenied):
+			pass
 
-        if not is_auth:
-            #logging.debug('_check_polkit_privilege: sender %s on connection %s pid %i is not authorized for %s: %s' %
-            #        (sender, conn, pid, privilege, str(details)))
-            raise PermissionDeniedByPolicy(privilege)
+		# query PolicyKit
+		if self.polkit is None:
+			self.polkit = dbus.Interface(dbus.SystemBus().get_object(
+				'org.freedesktop.PolicyKit1',
+				'/org/freedesktop/PolicyKit1/Authority', False),
+				'org.freedesktop.PolicyKit1.Authority')
+		try:
+			# we don't need is_challenge return here, since we call with AllowUserInteraction
+			(is_auth, _, details) = self.polkit.CheckAuthorization(
+					('unix-process', {'pid': dbus.UInt32(pid, variant_level=1),
+						'start-time': dbus.UInt64(0, variant_level=1)}), 
+					privilege, {'': ''}, dbus.UInt32(1), '', timeout=600)
+		except dbus.DBusException as e:
+			if e._dbus_error_name == 'org.freedesktop.DBus.Error.ServiceUnknown':
+				# polkitd timed out, connect again
+				self.polkit = None
+				return self._check_polkit_privilege(sender, conn, privilege)
+			else:
+				raise
+
+		if not is_auth:
+			#logging.debug('_check_polkit_privilege: sender %s on connection %s pid %i is not authorized for %s: %s' %
+			#        (sender, conn, pid, privilege, str(details)))
+			raise PermissionDeniedByPolicy("Authentication failed!")
 
 if __name__ == '__main__':
-    dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+	dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
-    bus = dbus.SystemBus()
-    name = dbus.service.BusName("com.ubuntu.IndicatorCpufreqSelector", bus)
-    object = IndicatorCpufreqSelector(bus, '/Selector')
-    #object.enforce_polkit = False
+	bus = dbus.SystemBus()
+	name = dbus.service.BusName("com.ubuntu.IndicatorCpufreqSelector", bus)
+	object = IndicatorCpufreqSelector(bus, '/Selector')
+	#object.enforce_polkit = False
 
-    mainloop = GLib.MainLoop()
-    mainloop.run()
+	mainloop = GLib.MainLoop()
+	mainloop.run()

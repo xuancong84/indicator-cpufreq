@@ -8,6 +8,7 @@ To install:
 1. apt-get install indicator-cpufreq
 2. goto the folder (usually at /usr/lib/python3/dist-packages/indicator_cpufreq) which contains cpufreq.py and indicator.py
 3. download and overwrite cpufreq.py and indicator.py
+4. copy ./bin/indicator-cpufreq-selector to /usr/bin/indicator-cpufreq-selector
 
 
 Imported from https://launchpad.net/indicator-cpufreq

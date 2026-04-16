@@ -220,9 +220,16 @@ def get_available_frequencies2(cpu):
 
 def set_frequency2(cpu, freq):
 	try:
-		for i in range(get_maxcpu()):
-			with open('/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq'%i,'w') as fp:
-				print(freq, file=fp, flush=True)
+		with open(f'/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_max_freq','w') as fp:
+			print(freq, file=fp, flush=True)
+		return 0
+	except:
+		return -1
+
+def modify_policy_governor2(cpu, governor):
+	try:
+		with open(f'/sys/devices/system/cpu/cpu{cpu}/cpufreq/scaling_governor','w') as fp:
+			print(governor, file=fp, flush=True)
 		return 0
 	except:
 		return -1
@@ -238,4 +245,5 @@ def get_frequency(cpu):
 if not get_available_frequencies(0):
 	get_available_frequencies = get_available_frequencies2
 	set_frequency = set_frequency2
+	modify_policy_governor = modify_policy_governor2
 	get_freq_hardware = get_freq_kernel = get_frequency

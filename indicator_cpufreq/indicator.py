@@ -53,6 +53,20 @@ def readable_governor(g):
 	else:
 		return g
 
+def show_gtk_dialog(message, title="Permission denied"):
+    dialog = Gtk.MessageDialog(
+        transient_for=None,
+        flags=0,
+        message_type=Gtk.MessageType.ERROR,
+        buttons=Gtk.ButtonsType.OK,
+        text=title,
+    )
+    dialog.format_secondary_text(message)
+    dialog.set_modal(True)
+    dialog.set_keep_above(True)
+    dialog.connect("response", lambda d, r: d.destroy())
+    dialog.show_all()
+
 class MyIndicator(object):
 	def __init__(self, show_frequency=False):
 		self.show_frequency = show_frequency
@@ -142,12 +156,18 @@ class MyIndicator(object):
 			bus = dbus.SystemBus()
 			proxy = bus.get_object("com.ubuntu.IndicatorCpufreqSelector", "/Selector", introspect=False)
 			cpus = [dbus.UInt32(cpu) for cpu in self.cpus]
-			if select == 'frequency':
-				proxy.SetFrequency(cpus, dbus.UInt32(value),
-					dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
-			else:
-				proxy.SetGovernor(cpus, value,
-					dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+			try:
+				if select == 'frequency':
+					proxy.SetFrequency(cpus, dbus.UInt32(value),
+						dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+				else:
+					proxy.SetGovernor(cpus, value,
+						dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+			except dbus.DBusException as e:
+				name = e.get_dbus_name()
+				msg = str(e)
+				if name == 'com.ubuntu.DeviceDriver.PermissionDeniedByPolicy':
+					show_gtk_dialog(msg)
 	
 	def can_set(self):
 		pass
