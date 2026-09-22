@@ -18,14 +18,79 @@
 
 from gi.repository import GLib
 
+import os, sys
 import psutil, subprocess
 import dbus.service
 import dbus.mainloop.glib
+
+# Add project root directory (enable symlink, and trunk execution), so this
+# picks up the checkout's indicator_cpufreq package instead of one already
+# installed under site-packages.
+PROJECT_ROOT_DIRECTORY = os.path.abspath(
+    os.path.dirname(os.path.dirname(os.path.realpath(sys.argv[0]))))
+if (os.path.exists(os.path.join(PROJECT_ROOT_DIRECTORY, 'indicator_cpufreq'))
+    and PROJECT_ROOT_DIRECTORY not in sys.path):
+    sys.path.insert(0, PROJECT_ROOT_DIRECTORY)
 
 from indicator_cpufreq import cpufreq
 
 class PermissionDeniedByPolicy(dbus.DBusException):
     _dbus_error_name = 'com.ubuntu.DeviceDriver.PermissionDeniedByPolicy'
+
+class SuspendGuard(object):
+	'''Re-enables every offlined CPU core across suspend, then restores them
+	to offline again after resume.
+
+	Some hardware/driver combinations hang or misbehave on resume if a core
+	was left offline across suspend (e.g. its IRQs never get re-routed
+	correctly). We hold a systemd-logind "delay" sleep inhibitor so we get
+	to run before suspend actually happens, not just get notified after
+	the fact; the inhibitor is released (letting sleep proceed) as soon as
+	we're done, and re-armed on resume for the next cycle.
+	'''
+
+	BUS_NAME = 'org.freedesktop.login1'
+	OBJECT_PATH = '/org/freedesktop/login1'
+	MANAGER_IFACE = 'org.freedesktop.login1.Manager'
+
+	def __init__(self, bus):
+		self.manager = dbus.Interface(
+			bus.get_object(self.BUS_NAME, self.OBJECT_PATH), self.MANAGER_IFACE)
+		self._inhibit_fd = None
+		self._restore_cpus = []
+		self._acquire()
+		bus.add_signal_receiver(self._on_prepare_for_sleep,
+			signal_name='PrepareForSleep',
+			dbus_interface=self.MANAGER_IFACE,
+			bus_name=self.BUS_NAME)
+
+	def _acquire(self):
+		try:
+			fd = self.manager.Inhibit('sleep', 'indicator-cpufreq-selector',
+				'Re-enable disabled CPU cores before suspend', 'delay')
+			self._inhibit_fd = fd.take()
+		except dbus.DBusException as e:
+			sys.stderr.write("Warning: could not acquire sleep inhibitor: %s\n" % e)
+			self._inhibit_fd = None
+
+	def _on_prepare_for_sleep(self, sleeping):
+		if not sleeping:
+			# just woke up; put back-offline the cores we forced online, then
+			# re-arm the inhibitor for the next suspend cycle
+			for cpu in self._restore_cpus:
+				cpufreq.set_cpu_online(cpu, False)
+			self._restore_cpus = []
+			self._acquire()
+			return
+		try:
+			self._restore_cpus = [cpu for cpu in range(cpufreq.get_maxcpu())
+				if not cpufreq.get_cpu_online(cpu)]
+			for cpu in self._restore_cpus:
+				cpufreq.set_cpu_online(cpu, True)
+		finally:
+			if self._inhibit_fd is not None:
+				os.close(self._inhibit_fd)
+				self._inhibit_fd = None
 
 class IndicatorCpufreqSelector(dbus.service.Object):
 
@@ -61,6 +126,16 @@ class IndicatorCpufreqSelector(dbus.service.Object):
 		self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setfrequencyscaling')
 		for cpu in cpus:
 			error = cpufreq.modify_policy_governor(cpu, governor)
+
+	@dbus.service.method(dbus_interface='com.ubuntu.IndicatorCpufreqSelector',
+		in_signature='aub',
+		out_signature='',
+		sender_keyword='sender',
+		connection_keyword='conn')
+	def SetCpuOnline(self, cpus, online, sender=None, conn=None):
+		self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setcpuonline')
+		for cpu in cpus:
+			error = cpufreq.set_cpu_online(cpu, online)
 
 	def _check_polkit_privilege(self, sender, conn, privilege):
 		'''Verify that sender has a given PolicyKit privilege.
@@ -130,6 +205,7 @@ if __name__ == '__main__':
 	name = dbus.service.BusName("com.ubuntu.IndicatorCpufreqSelector", bus)
 	object = IndicatorCpufreqSelector(bus, '/Selector')
 	#object.enforce_polkit = False
+	suspend_guard = SuspendGuard(bus)
 
 	mainloop = GLib.MainLoop()
 	mainloop.run()

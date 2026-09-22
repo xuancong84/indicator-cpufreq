@@ -14,6 +14,7 @@
 # with this program.  If not, see <http://www.gnu.org/licenses/>.
 ### END LICENSE
 
+import os
 from ctypes import *
 from ctypes.util import find_library
 
@@ -241,6 +242,32 @@ def get_frequency(cpu):
 	except:
 		pass
 	return -1
+
+def get_cpu_online_path(cpu):
+	path = '/sys/devices/system/cpu/cpu%d/online' % cpu
+	return path if os.path.exists(path) else None
+
+def get_cpu_online(cpu):
+	path = get_cpu_online_path(cpu)
+	if path is None:
+		# no 'online' switch (e.g. cpu0 on most systems) -> can't be offlined
+		return True
+	try:
+		with open(path) as fp:
+			return fp.read().strip() == '1'
+	except OSError:
+		return True
+
+def set_cpu_online(cpu, online):
+	path = get_cpu_online_path(cpu)
+	if path is None:
+		return -1
+	try:
+		with open(path, 'w') as fp:
+			print('1' if online else '0', file=fp, flush=True)
+		return 0
+	except OSError:
+		return -1
 
 if not get_available_frequencies(0):
 	get_available_frequencies = get_available_frequencies2
