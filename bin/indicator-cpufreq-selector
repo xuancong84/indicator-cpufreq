@@ -137,6 +137,15 @@ class IndicatorCpufreqSelector(dbus.service.Object):
 		for cpu in cpus:
 			error = cpufreq.set_cpu_online(cpu, online)
 
+	@dbus.service.method(dbus_interface='com.ubuntu.IndicatorCpufreqSelector',
+		in_signature='s',
+		out_signature='',
+		sender_keyword='sender',
+		connection_keyword='conn')
+	def SetPlatformProfile(self, profile, sender=None, conn=None):
+		self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setplatformprofile')
+		error = cpufreq.set_platform_profile(profile)
+
 	def _check_polkit_privilege(self, sender, conn, privilege):
 		'''Verify that sender has a given PolicyKit privilege.
 

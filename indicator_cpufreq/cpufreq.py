@@ -269,6 +269,37 @@ def set_cpu_online(cpu, online):
 	except OSError:
 		return -1
 
+# ACPI platform profile ("fan/cooling policy", e.g. low-power/balanced/
+# performance): /sys/firmware/acpi/platform_profile{,_choices}. Not present
+# on all hardware, so callers must check has_platform_profile() first.
+PLATFORM_PROFILE_PATH = '/sys/firmware/acpi/platform_profile'
+PLATFORM_PROFILE_CHOICES_PATH = '/sys/firmware/acpi/platform_profile_choices'
+
+def has_platform_profile():
+	return os.path.isfile(PLATFORM_PROFILE_PATH) and os.path.isfile(PLATFORM_PROFILE_CHOICES_PATH)
+
+def get_platform_profile_choices():
+	try:
+		with open(PLATFORM_PROFILE_CHOICES_PATH) as fp:
+			return fp.read().split()
+	except OSError:
+		return []
+
+def get_platform_profile():
+	try:
+		with open(PLATFORM_PROFILE_PATH) as fp:
+			return fp.read().strip()
+	except OSError:
+		return None
+
+def set_platform_profile(profile):
+	try:
+		with open(PLATFORM_PROFILE_PATH, 'w') as fp:
+			print(profile, file=fp, flush=True)
+		return 0
+	except OSError:
+		return -1
+
 if not get_available_frequencies(0):
 	get_available_frequencies = get_available_frequencies2
 	set_frequency = set_frequency2

@@ -70,6 +70,19 @@ def readable_governor(g):
 	else:
 		return g
 
+platform_profile_names = {
+	'low-power': _("Low power"),
+	'cool': _("Cool"),
+	'quiet': _("Quiet"),
+	'balanced': _("Balanced"),
+	'balanced-performance': _("Balanced performance"),
+	'performance': _("Performance"),
+	'custom': _("Custom"),
+}
+
+def readable_platform_profile(p):
+	return platform_profile_names.get(p, p)
+
 def show_gtk_dialog(message, title="Permission denied"):
     dialog = Gtk.MessageDialog(
         transient_for=None,
@@ -199,6 +212,7 @@ class MyIndicator(object):
 			self._set_cpus_online(offline_cpus, False)
 
 		self.select_items = {}
+		self.profile_items = {}
 		self.freq_menu = self._build_freq_menu()
 		self._core_menu = None
 
@@ -269,6 +283,22 @@ class MyIndicator(object):
 			col += 1
 			menu_item.connect('activate', self.select_activated, 'governor', governor)
 			self.select_items[governor] = menu_item
+		row += 1
+
+		if cpufreq.has_platform_profile():
+			profiles = cpufreq.get_platform_profile_choices()
+			if profiles:
+				menu.attach(Gtk.SeparatorMenuItem(), 0, columns, row, row + 1)
+				row += 1
+				group = []
+				col = 0
+				for profile in profiles:
+					menu_item = Gtk.RadioMenuItem.new_with_label(group, readable_platform_profile(profile))
+					group = menu_item.get_group()
+					menu.attach(menu_item, col, col + 1, row, row + 1)
+					col += 1
+					menu_item.connect('activate', self.select_activated, 'platform_profile', profile)
+					self.profile_items[profile] = menu_item
 
 		menu.show_all()
 		return menu
@@ -363,6 +393,8 @@ class MyIndicator(object):
 	def update_ui(self):
 		for i in self.select_items.values():
 			i.handler_block_by_func(self.select_activated)
+		for i in self.profile_items.values():
+			i.handler_block_by_func(self.select_activated)
 
 		fmin, fmax, governor = cpufreq.get_policy(self.cpus[0])
 		# use the highest freq among online cores for display
@@ -384,7 +416,15 @@ class MyIndicator(object):
 		except:
 			pass
 
+		if self.profile_items:
+			try:
+				self.profile_items[cpufreq.get_platform_profile()].set_active(True)
+			except:
+				pass
+
 		for i in self.select_items.values():
+			i.handler_unblock_by_func(self.select_activated)
+		for i in self.profile_items.values():
 			i.handler_unblock_by_func(self.select_activated)
 
 	def select_activated(self, menuitem, select, value):
@@ -396,8 +436,11 @@ class MyIndicator(object):
 				if select == 'frequency':
 					proxy.SetFrequency(cpus, dbus.UInt32(value),
 						dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
-				else:
+				elif select == 'governor':
 					proxy.SetGovernor(cpus, value,
+						dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+				else:
+					proxy.SetPlatformProfile(value,
 						dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
 			except dbus.DBusException as e:
 				name = e.get_dbus_name()
