@@ -290,9 +290,26 @@ class MyIndicator(object):
 			if profiles:
 				menu.attach(Gtk.SeparatorMenuItem(), 0, columns, row, row + 1)
 				row += 1
+				# A real Gtk.MenuItem (GtkMenu's grid layout doesn't reliably
+				# size/render non-GtkMenuItem children) kept sensitive, so the
+				# text isn't drawn in the greyed-out "insensitive" style, but
+				# with its clicks swallowed so it neither closes the menu nor
+				# does anything when clicked.
+				label_item = Gtk.MenuItem()
+				label = Gtk.Label()
+				label.set_markup("<b>%s</b>" % GLib.markup_escape_text(_("Fan:")))
+				label.set_xalign(0)
+				label_item.add(label)
+				label_item.set_can_focus(False)
+				label_item.connect("button-press-event", lambda w, e: True)
+				label_item.connect("button-release-event", lambda w, e: True)
+				menu.attach(label_item, 0, 1, row, row + 1)
 				group = []
-				col = 0
+				col = 1
 				for profile in profiles:
+					if col >= columns:
+						row += 1
+						col = 0
 					menu_item = Gtk.RadioMenuItem.new_with_label(group, readable_platform_profile(profile))
 					group = menu_item.get_group()
 					menu.attach(menu_item, col, col + 1, row, row + 1)
@@ -400,9 +417,23 @@ class MyIndicator(object):
 		# use the highest freq among online cores for display
 		freq = max([cpufreq.get_freq_kernel(cpu) for cpu in self.cpus if cpufreq.get_cpu_online(cpu)])
 
-		ratio = min([25, 50, 75, 100], key=lambda x: abs((fmax - fmin) * x / 100.0 - (freq - fmin)))
-		if freq < fmax and ratio == 100:
-			ratio = 75
+		# Scale the icon against the CPU's fixed hardware frequency range
+		# (cpuinfo_min/max), not the policy window from get_policy() above
+		# (scaling_min/max): on intel_pstate/amd-pstate drivers that window
+		# itself tracks the live/EPP-driven frequency and can be only a few
+		# hundred MHz wide even while actively adjusting, which pins the
+		# icon near one end almost all the time regardless of how fast the
+		# CPU is really running relative to what it's capable of.
+		hw_min, hw_max = cpufreq.get_hardware_limits(self.cpus[0])
+		# Equal-width 20% bands (0-20/20-40/.../80-100), not "nearest of the 5
+		# anchor points" -- the latter makes the top band only the top 12.5%
+		# of the range (the midpoint between the 75 and 100 anchors), which
+		# on a CPU whose hardware max is a rarely-sustained turbo/boost peak
+		# meant the icon could almost never show as full.
+		pct = 0.0
+		if hw_max > hw_min:
+			pct = max(0.0, min(100.0, (freq - hw_min) * 100.0 / (hw_max - hw_min)))
+		ratio = min(4, int(pct // 20)) * 25
 
 		self.sni.set_icon('indicator-cpufreq-%d' % ratio)
 		if self.show_frequency:

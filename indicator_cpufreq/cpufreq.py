@@ -236,8 +236,12 @@ def modify_policy_governor2(cpu, governor):
 		return -1
 
 def get_frequency(cpu):
+	# the live/instantaneous frequency, not the configured cap
+	# (scaling_max_freq) -- this backs get_freq_kernel/get_freq_hardware
+	# below on intel_pstate/amd-pstate systems, which the indicator polls
+	# once a second to pick the tray icon and tooltip text.
 	try:
-		with open('/sys/devices/system/cpu/cpu%d/cpufreq/scaling_max_freq'%cpu) as fp:
+		with open('/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq'%cpu) as fp:
 			return int(fp.read().strip())
 	except:
 		pass
