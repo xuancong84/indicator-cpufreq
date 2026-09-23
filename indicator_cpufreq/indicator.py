@@ -186,6 +186,12 @@ class MyIndicator(object):
 		self.show_frequency = show_frequency
 		self.session_bus = dbus.SessionBus()
 
+		# whether the tray icon's bar count tracks the configured max
+		# frequency (stable, only changes when you pick a new one from the
+		# left-click menu) or the live/instantaneous frequency (moves with
+		# load); toggled from the right-click menu, see _build_core_menu.
+		self.icon_mode = 'cap'
+
 		self.cpus = list(range(cpufreq.get_maxcpu()))
 
 		# group cores by their hardware frequency range (e.g. P-cores vs
@@ -214,6 +220,7 @@ class MyIndicator(object):
 		self.select_items = {}
 		self.profile_items = {}
 		self.freq_menu = self._build_freq_menu()
+		self._sync_freq_selection()
 		self._core_menu = None
 
 		# GTK needs a real, realized GdkWindow to anchor a popup menu to.
@@ -254,6 +261,7 @@ class MyIndicator(object):
 		group = []
 
 		freqs = list(reversed(sorted(set(cpufreq.get_available_frequencies2(self.cpus[0])))))
+		self.freq_choices = freqs
 		columns = max(1, math.ceil(len(freqs) / self._max_menu_rows()))
 		row = 0
 		for i, freq in enumerate(freqs):
@@ -353,11 +361,28 @@ class MyIndicator(object):
 			group_item.connect("toggled", on_group_toggled)
 
 		menu.append(Gtk.SeparatorMenuItem())
+
+		group = []
+		for mode, label in [
+				('cap', _("Tray icon shows configured max frequency")),
+				('live', _("Tray icon shows live CPU frequency"))]:
+			item = Gtk.RadioMenuItem.new_with_label(group, label)
+			group = item.get_group()
+			item.set_active(self.icon_mode == mode)
+			item.connect('toggled', self._icon_mode_toggled, mode)
+			menu.append(item)
+
+		menu.append(Gtk.SeparatorMenuItem())
 		close_item = Gtk.MenuItem.new_with_label(_("Close"))
 		menu.append(close_item)
 
 		menu.show_all()
 		return menu
+
+	def _icon_mode_toggled(self, item, mode):
+		if item.get_active():
+			self.icon_mode = mode
+			self.update_ui()
 
 	def _keep_menu_open_on_click(self, item):
 		# Clicking any menu item, checkbox or not, normally closes the whole
@@ -371,6 +396,25 @@ class MyIndicator(object):
 				widget.set_active(not widget.get_active())
 			return True
 		item.connect("button-release-event", on_button_release)
+
+	def _sync_freq_selection(self):
+		# Checks whichever frequency menu item is closest to the current
+		# scaling_max_freq. Called once at startup only, not from update_ui's
+		# per-second poll: on intel_pstate/amd-pstate systems scaling_max_freq
+		# itself drifts on its own (EPP/hardware feedback adjusts it even
+		# without the user touching the menu), so re-syncing against it every
+		# poll made the checked item visibly flicker even right after
+		# explicitly picking one. Once the user (or this initial sync) picks
+		# an item, GTK's own radio-group state is left alone and stays put.
+		try:
+			fmin, fmax, governor = cpufreq.get_policy(self.cpus[0])
+			closest_freq = min(self.freq_choices, key=lambda f: abs(f - fmax))
+			item = self.select_items[closest_freq]
+			item.handler_block_by_func(self.select_activated)
+			item.set_active(True)
+			item.handler_unblock_by_func(self.select_activated)
+		except:
+			pass
 
 	def _set_cpus_online(self, cpus, online):
 		bus = dbus.SystemBus()
@@ -425,6 +469,12 @@ class MyIndicator(object):
 		# icon near one end almost all the time regardless of how fast the
 		# CPU is really running relative to what it's capable of.
 		hw_min, hw_max = cpufreq.get_hardware_limits(self.cpus[0])
+		# icon_mode 'cap': track fmax (scaling_max_freq, the configured cap)
+		# so the icon only changes when you pick a different frequency, same
+		# as the frequency menu's own checkmark. icon_mode 'live': track the
+		# live/instantaneous freq instead, which moves with load. Toggled
+		# from the right-click menu, see _build_core_menu.
+		icon_freq = fmax if self.icon_mode == 'cap' else freq
 		# Equal-width 20% bands (0-20/20-40/.../80-100), not "nearest of the 5
 		# anchor points" -- the latter makes the top band only the top 12.5%
 		# of the range (the midpoint between the 75 and 100 anchors), which
@@ -432,16 +482,12 @@ class MyIndicator(object):
 		# meant the icon could almost never show as full.
 		pct = 0.0
 		if hw_max > hw_min:
-			pct = max(0.0, min(100.0, (freq - hw_min) * 100.0 / (hw_max - hw_min)))
+			pct = max(0.0, min(100.0, (icon_freq - hw_min) * 100.0 / (hw_max - hw_min)))
 		ratio = min(4, int(pct // 20)) * 25
 
 		self.sni.set_icon('indicator-cpufreq-%d' % ratio)
 		if self.show_frequency:
 			self.sni.set_tooltip(readable_frequency(freq), readable_governor(governor))
-		try:
-			self.select_items[freq].set_active(True)
-		except:
-			pass
 		try:
 			self.select_items[governor].set_active(True)
 		except:
