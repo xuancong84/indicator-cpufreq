@@ -186,6 +186,17 @@ class MyIndicator(object):
 		self.show_frequency = show_frequency
 		self.session_bus = dbus.SessionBus()
 
+		# Enforce a single instance per user: claim a well-known name on the
+		# session bus (which is per login-session, i.e. per user in normal
+		# desktop use) without queueing. If another instance already owns
+		# it, bail out immediately instead of showing a second tray icon.
+		try:
+			self._single_instance_name = dbus.service.BusName(
+				'com.ubuntu.IndicatorCpufreq', bus=self.session_bus, do_not_queue=True)
+		except dbus.exceptions.NameExistsException:
+			sys.stderr.write("indicator-cpufreq is already running; exiting.\n")
+			sys.exit(0)
+
 		# whether the tray icon's bar count tracks the configured max
 		# frequency (stable, only changes when you pick a new one from the
 		# left-click menu) or the live/instantaneous frequency (moves with
