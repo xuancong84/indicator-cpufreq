@@ -65,6 +65,8 @@ if __name__ == "__main__":
         help=_('set error_level output to warning, info, and then debug'))
     parser.add_option('-f', '--frequency', dest='show_frequency', action='store_true',
         help=_('show the frequency with text along with the icon'))
+    parser.add_option('--allow-multiple-instances', dest='allow_multiple_instances', action='store_true',
+        help=_('skip the check that prevents more than one instance running per user'))
     parser.set_defaults(logging_level=0, foo=None)
     (options, args) = parser.parse_args()
 
@@ -76,5 +78,5 @@ if __name__ == "__main__":
     # Run your cli application there.
     from indicator_cpufreq.indicator import MyIndicator
     from gi.repository import Gtk
-    ind = MyIndicator(options.show_frequency)
+    ind = MyIndicator(options.show_frequency, options.allow_multiple_instances)
     Gtk.main()

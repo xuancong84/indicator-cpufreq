@@ -180,7 +180,7 @@ class StatusNotifierItem(dbus.service.Object):
 			self.NewToolTip()
 
 class MyIndicator(object):
-	def __init__(self, show_frequency=False):
+	def __init__(self, show_frequency=False, allow_multiple_instances=False):
 		dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
 		self.show_frequency = show_frequency
@@ -190,12 +190,14 @@ class MyIndicator(object):
 		# session bus (which is per login-session, i.e. per user in normal
 		# desktop use) without queueing. If another instance already owns
 		# it, bail out immediately instead of showing a second tray icon.
-		try:
-			self._single_instance_name = dbus.service.BusName(
-				'com.ubuntu.IndicatorCpufreq', bus=self.session_bus, do_not_queue=True)
-		except dbus.exceptions.NameExistsException:
-			sys.stderr.write("indicator-cpufreq is already running; exiting.\n")
-			sys.exit(0)
+		# --allow-multiple-instances skips this for testing/debugging.
+		if not allow_multiple_instances:
+			try:
+				self._single_instance_name = dbus.service.BusName(
+					'com.ubuntu.IndicatorCpufreq', bus=self.session_bus, do_not_queue=True)
+			except dbus.exceptions.NameExistsException:
+				sys.stderr.write("indicator-cpufreq is already running; exiting.\n")
+				sys.exit(0)
 
 		# whether the tray icon's bar count tracks the configured max
 		# frequency (stable, only changes when you pick a new one from the
@@ -311,17 +313,14 @@ class MyIndicator(object):
 				row += 1
 				# A real Gtk.MenuItem (GtkMenu's grid layout doesn't reliably
 				# size/render non-GtkMenuItem children) kept sensitive, so the
-				# text isn't drawn in the greyed-out "insensitive" style, but
-				# with its clicks swallowed so it neither closes the menu nor
-				# does anything when clicked.
+				# text isn't drawn in the greyed-out "insensitive" style. It
+				# has no 'activate' handler, so clicking it does nothing but
+				# close the menu, same as any other plain menu item.
 				label_item = Gtk.MenuItem()
 				label = Gtk.Label()
 				label.set_markup("<b>%s</b>" % GLib.markup_escape_text(_("Fan:")))
 				label.set_xalign(0)
 				label_item.add(label)
-				label_item.set_can_focus(False)
-				label_item.connect("button-press-event", lambda w, e: True)
-				label_item.connect("button-release-event", lambda w, e: True)
 				menu.attach(label_item, 0, 1, row, row + 1)
 				group = []
 				col = 1
@@ -341,6 +340,19 @@ class MyIndicator(object):
 
 	def _build_core_menu(self):
 		menu = Gtk.Menu()
+
+		# A real Gtk.MenuItem (GtkMenu doesn't reliably size/render a bare
+		# Gtk.Label as a direct child) kept sensitive, so the text isn't
+		# drawn in the greyed-out "insensitive" style. It has no 'activate'
+		# handler, so clicking it does nothing but close the menu, same as
+		# any other plain menu item. Same pattern as the "Fan:" label in
+		# _build_freq_menu.
+		label_item = Gtk.MenuItem()
+		label = Gtk.Label()
+		label.set_markup("<b>%s</b>" % GLib.markup_escape_text(_("Enabled CPU cores:")))
+		label.set_xalign(0)
+		label_item.add(label)
+		menu.append(label_item)
 
 		for (fmin, fmax), cpus in sorted(self.cpu_groups.items()):
 			online = {cpu: cpufreq.get_cpu_online(cpu) for cpu in cpus}
@@ -382,10 +394,6 @@ class MyIndicator(object):
 			item.set_active(self.icon_mode == mode)
 			item.connect('toggled', self._icon_mode_toggled, mode)
 			menu.append(item)
-
-		menu.append(Gtk.SeparatorMenuItem())
-		close_item = Gtk.MenuItem.new_with_label(_("Close"))
-		menu.append(close_item)
 
 		menu.show_all()
 		return menu
