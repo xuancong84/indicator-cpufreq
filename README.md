@@ -1,8 +1,10 @@
 # indicator-cpufreq
 
-A system tray applet for viewing and changing CPU frequency scaling on Linux. Originally a port
-of GNOME's CPU frequency applet for Ubuntu/Unity; this fork has been updated to also work on
-modern `intel_pstate`/`amd-pstate` systems and KDE Plasma (X11 and Wayland).
+A system tray applet for viewing, changing CPU frequency scaling, and enabling/disabling CPU cores on Linux.
+Originally a port of GNOME's CPU frequency applet for Ubuntu/Unity; this fork has been updated to also work on modern `intel_pstate`/`amd-pstate` systems and KDE Plasma (X11 and Wayland).
+If your laptop exposes ACPI interface for fan cooling profile, it can also show and adjust.
+![Screenshot: adjust frequency menu](./icons/1.png)
+![Screenshot: enable/disable cores menu](./icons/2.png)
 
 ## Features
 
