@@ -32,10 +32,16 @@ if (os.path.exists(os.path.join(PROJECT_ROOT_DIRECTORY, 'indicator_cpufreq'))
     and PROJECT_ROOT_DIRECTORY not in sys.path):
     sys.path.insert(0, PROJECT_ROOT_DIRECTORY)
 
-from indicator_cpufreq import cpufreq
+from indicator_cpufreq import cpufreq, fan
 
 class PermissionDeniedByPolicy(dbus.DBusException):
     _dbus_error_name = 'com.ubuntu.DeviceDriver.PermissionDeniedByPolicy'
+
+class InvalidArgument(dbus.DBusException):
+    _dbus_error_name = 'com.ubuntu.IndicatorCpufreqSelector.InvalidArgument'
+
+class Failed(dbus.DBusException):
+    _dbus_error_name = 'com.ubuntu.IndicatorCpufreqSelector.Failed'
 
 class SuspendGuard(object):
 	'''Re-enables every offlined CPU core across suspend, then restores them
@@ -145,6 +151,33 @@ class IndicatorCpufreqSelector(dbus.service.Object):
 	def SetPlatformProfile(self, profile, sender=None, conn=None):
 		self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setplatformprofile')
 		error = cpufreq.set_platform_profile(profile)
+
+	@dbus.service.method(dbus_interface='com.ubuntu.IndicatorCpufreqSelector',
+		in_signature='s',
+		out_signature='',
+		sender_keyword='sender',
+		connection_keyword='conn')
+	def SetFanProfile(self, profile, sender=None, conn=None):
+		self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setfan')
+		if profile not in fan.get_fan_profile_choices():
+			raise InvalidArgument("Unsupported fan profile: %s" % profile)
+		if fan.set_fan_profile(profile):
+			raise Failed("Could not set fan profile to %s" % profile)
+
+	@dbus.service.method(dbus_interface='com.ubuntu.IndicatorCpufreqSelector',
+		in_signature='u',
+		out_signature='',
+		sender_keyword='sender',
+		connection_keyword='conn')
+	def SetFanSpeed(self, percent, sender=None, conn=None):
+		self._check_polkit_privilege(sender, conn, 'com.ubuntu.indicatorcpufreqselector.setfan')
+		if not fan.has_fan_speed():
+			raise InvalidArgument("Fan speed control not available")
+		fmin, fmax, step = fan.get_fan_speed_range()
+		if not fmin <= percent <= fmax:
+			raise InvalidArgument("Fan speed must be between %d%% and %d%%" % (fmin, fmax))
+		if fan.set_fan_speed(percent):
+			raise Failed("Could not set fan speed to %d%%" % percent)
 
 	def _check_polkit_privilege(self, sender, conn, privilege):
 		'''Verify that sender has a given PolicyKit privilege.

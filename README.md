@@ -2,7 +2,7 @@
 
 A system tray applet for viewing, changing CPU frequency scaling, and enabling/disabling CPU cores on Linux.
 Originally a port of GNOME's CPU frequency applet for Ubuntu/Unity; this fork has been updated to also work on modern `intel_pstate`/`amd-pstate` systems and KDE Plasma (X11 and Wayland).
-If your laptop exposes ACPI interface for fan cooling profile, it can also show and adjust.
+If your laptop hardware is supported by Linux driver, or you have installed ACPI driver for your laptop, so that the ACPI fan control profile is exposed in `/sys/devices/*`, it can also show and adjust the cooling profile and fan speed.
 ![Screenshot: adjust frequency menu](./icons/1.png)
 ![Screenshot: enable/disable cores menu](./icons/2.png)
 
@@ -14,8 +14,13 @@ If your laptop exposes ACPI interface for fan cooling profile, it can also show 
   supports). On laptops whose firmware exposes an ACPI platform profile (`/sys/firmware/acpi/
   platform_profile`) — the "fan/cooling policy" also known on some vendors as a thermal/Silent-
   Balanced-Performance mode — this is auto-detected and added as a third choice group in the same
-  menu (e.g. Quiet / Balanced / Performance). It's simply absent if your firmware doesn't expose
-  it.
+  menu (e.g. Quiet / Balanced / Performance), labelled "Power:". It's simply absent if your
+  firmware doesn't expose it.
+- On Gigabyte AERO/AORUS laptops running the
+  [gigabyte-laptop-wmi](https://github.com/tangalbert919/gigabyte-laptop-wmi) (`aorus_laptop`)
+  driver, the same menu also gets a "Fan:" profile row (Normal / Silent / Gaming / Auto / Fixed),
+  a fan speed slider (dragging it switches to Fixed mode), and a live fan RPM readout. Nothing
+  fan-related is shown on machines without a supported fan driver.
 - **Right-click** the tray icon: enable or disable individual CPU cores. Cores are grouped by
   their hardware frequency range (e.g. performance cores vs. efficiency cores on a hybrid CPU, or
   cores with a different max clock in an asymmetric AMD design); checking/unchecking a group's
@@ -48,6 +53,8 @@ whether or not an app uses this trick.
   needs the extension linked above; most other DEs (XFCE, LXQt, ...) support this natively too.
 - (Optional) a kernel/firmware combination exposing `/sys/firmware/acpi/platform_profile` for the
   fan/cooling profile menu; not all hardware has this, and the app works fine without it.
+- (Optional) the `aorus_laptop` kernel module on Gigabyte AERO/AORUS laptops, for the fan profile,
+  fan speed slider and RPM readout.
 - `gettext` and, optionally, `intltool` if you want translated strings installed (the app still
   works fine in English without them).
 

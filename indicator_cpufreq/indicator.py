@@ -35,7 +35,7 @@ import dbus
 import dbus.service
 import dbus.mainloop.glib
 
-from indicator_cpufreq import cpufreq
+from indicator_cpufreq import cpufreq, fan
 
 import gettext
 from gettext import gettext as _
@@ -82,6 +82,17 @@ platform_profile_names = {
 
 def readable_platform_profile(p):
 	return platform_profile_names.get(p, p)
+
+fan_profile_names = {
+	'normal': _("Normal"),
+	'silent': _("Silent"),
+	'gaming': _("Gaming"),
+	'auto': _("Auto"),
+	'fixed': _("Fixed"),
+}
+
+def readable_fan_profile(p):
+	return fan_profile_names.get(p, p)
 
 def show_gtk_dialog(message, title="Permission denied"):
     dialog = Gtk.MessageDialog(
@@ -232,6 +243,15 @@ class MyIndicator(object):
 
 		self.select_items = {}
 		self.profile_items = {}
+		self.fan_profile_items = {}
+		self.fan_scale = None
+		self.fan_rpm_label = None
+		self._fan_rpm_paths = fan.get_fan_rpm_paths()
+		# fan*_input channels that have ever reported a nonzero speed; the
+		# driver exposes a fixed number of channels whether or not that many
+		# fans are fitted, and absent ones always read 0
+		self._fan_seen = set()
+		self._fan_speed_timeout = None
 		self.freq_menu = self._build_freq_menu()
 		self._sync_freq_selection()
 		self._core_menu = None
@@ -311,17 +331,7 @@ class MyIndicator(object):
 			if profiles:
 				menu.attach(Gtk.SeparatorMenuItem(), 0, columns, row, row + 1)
 				row += 1
-				# A real Gtk.MenuItem (GtkMenu's grid layout doesn't reliably
-				# size/render non-GtkMenuItem children) kept sensitive, so the
-				# text isn't drawn in the greyed-out "insensitive" style. It
-				# has no 'activate' handler, so clicking it does nothing but
-				# close the menu, same as any other plain menu item.
-				label_item = Gtk.MenuItem()
-				label = Gtk.Label()
-				label.set_markup("<b>%s</b>" % GLib.markup_escape_text(_("Fan:")))
-				label.set_xalign(0)
-				label_item.add(label)
-				menu.attach(label_item, 0, 1, row, row + 1)
+				menu.attach(self._make_heading_item(_("Power:")), 0, 1, row, row + 1)
 				group = []
 				col = 1
 				for profile in profiles:
@@ -334,25 +344,131 @@ class MyIndicator(object):
 					col += 1
 					menu_item.connect('activate', self.select_activated, 'platform_profile', profile)
 					self.profile_items[profile] = menu_item
+				row += 1
+
+		row = self._build_fan_section(menu, row, columns)
 
 		menu.show_all()
 		return menu
 
+	def _make_heading_item(self, text):
+		# A real Gtk.MenuItem (GtkMenu's grid layout doesn't reliably
+		# size/render non-GtkMenuItem children) kept sensitive, so the
+		# text isn't drawn in the greyed-out "insensitive" style. It has no
+		# 'activate' handler, so clicking it does nothing but close the
+		# menu, same as any other plain menu item.
+		label_item = Gtk.MenuItem()
+		label = Gtk.Label()
+		label.set_markup("<b>%s</b>" % GLib.markup_escape_text(text))
+		label.set_xalign(0)
+		label_item.add(label)
+		return label_item
+
+	def _build_fan_section(self, menu, row, columns):
+		# Fan profile radios, fixed-speed slider and live RPM readout, each
+		# only if the hardware/driver supports it (see fan.py).
+		profiles = fan.get_fan_profile_choices() if fan.has_fan_profile() else []
+		has_speed = fan.has_fan_speed()
+		if not (profiles or has_speed):
+			return row
+		width = max(columns, 2)
+
+		menu.attach(Gtk.SeparatorMenuItem(), 0, width, row, row + 1)
+		row += 1
+
+		if profiles:
+			menu.attach(self._make_heading_item(_("Fan:")), 0, 1, row, row + 1)
+			group = []
+			col = 1
+			for profile in profiles:
+				if col >= width:
+					row += 1
+					col = 0
+				menu_item = Gtk.RadioMenuItem.new_with_label(group, readable_fan_profile(profile))
+				group = menu_item.get_group()
+				menu.attach(menu_item, col, col + 1, row, row + 1)
+				col += 1
+				menu_item.connect('activate', self.select_activated, 'fan_profile', profile)
+				self.fan_profile_items[profile] = menu_item
+			row += 1
+
+		if has_speed:
+			fmin, fmax, step = fan.get_fan_speed_range()
+			menu.attach(self._make_heading_item(_("Fan speed:")), 0, 1, row, row + 1)
+			scale = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, fmin, fmax, step)
+			scale.set_digits(0)
+			scale.set_value_pos(Gtk.PositionType.RIGHT)
+			scale.set_size_request(200, -1)
+			scale.connect('format-value', lambda s, v: "%d%%" % v)
+			scale.connect('change-value', self._fan_scale_change_value)
+			speed = fan.get_fan_speed()
+			if speed is not None:
+				scale.set_value(speed)
+			self.fan_scale = scale
+			menu.attach(self._make_slider_item(scale), 1, width, row, row + 1)
+			row += 1
+
+		if self._fan_rpm_paths:
+			item = Gtk.MenuItem()
+			self.fan_rpm_label = Gtk.Label()
+			self.fan_rpm_label.set_xalign(0)
+			item.add(self.fan_rpm_label)
+			self._keep_menu_open(item)
+			menu.attach(item, 0, width, row, row + 1)
+			row += 1
+			self._update_fan_rpm()
+
+		return row
+
+	def _make_slider_item(self, scale):
+		# GtkMenuItem has its own input window, so pointer events over it go
+		# to the item (whose default button-release handling would activate
+		# it and close the menu), never to a child widget. Hand them to the
+		# scale instead -- GTK translates the event's coordinates to the
+		# scale itself -- and swallow them so the menu stays open.
+		item = Gtk.MenuItem()
+		item.add(scale)
+		def forward(widget, event):
+			scale.event(event)
+			return True
+		for signal in ('button-press-event', 'button-release-event', 'motion-notify-event', 'scroll-event'):
+			item.connect(signal, forward)
+		return item
+
+	def _keep_menu_open(self, item):
+		item.connect('button-release-event', lambda w, e: True)
+
+	def _fan_scale_change_value(self, scale, scroll, value):
+		# snap to the driver's step, and only send the new speed once the
+		# slider has settled, rather than a D-Bus/polkit call per pixel dragged
+		value = fan.snap_fan_speed(value)
+		scale.set_value(value)
+		if self._fan_speed_timeout is not None:
+			GLib.source_remove(self._fan_speed_timeout)
+		self._fan_speed_timeout = GLib.timeout_add(400, self._fan_speed_settled)
+		return True
+
+	def _fan_speed_settled(self):
+		self._fan_speed_timeout = None
+		self._call_selector('fan_speed', int(self.fan_scale.get_value()))
+		self.update_ui()
+		return False
+
+	def _update_fan_rpm(self):
+		rpms = []
+		for i, path in enumerate(self._fan_rpm_paths):
+			rpm = fan.get_fan_rpm(path)
+			if rpm:
+				self._fan_seen.add(i)
+			rpms.append(rpm)
+		shown = [rpms[i] for i in sorted(self._fan_seen)] or rpms[:1]
+		self.fan_rpm_label.set_text(_("Fans: %s RPM") %
+			" / ".join("?" if rpm is None else str(rpm) for rpm in shown))
+
 	def _build_core_menu(self):
 		menu = Gtk.Menu()
 
-		# A real Gtk.MenuItem (GtkMenu doesn't reliably size/render a bare
-		# Gtk.Label as a direct child) kept sensitive, so the text isn't
-		# drawn in the greyed-out "insensitive" style. It has no 'activate'
-		# handler, so clicking it does nothing but close the menu, same as
-		# any other plain menu item. Same pattern as the "Fan:" label in
-		# _build_freq_menu.
-		label_item = Gtk.MenuItem()
-		label = Gtk.Label()
-		label.set_markup("<b>%s</b>" % GLib.markup_escape_text(_("Enabled CPU cores:")))
-		label.set_xalign(0)
-		label_item.add(label)
-		menu.append(label_item)
+		menu.append(self._make_heading_item(_("Enabled CPU cores:")))
 
 		for (fmin, fmax), cpus in sorted(self.cpu_groups.items()):
 			online = {cpu: cpufreq.get_cpu_online(cpu) for cpu in cpus}
@@ -460,6 +576,8 @@ class MyIndicator(object):
 		menu.popup_at_widget(self._anchor_win, Gdk.Gravity.NORTH_WEST, Gdk.Gravity.SOUTH_WEST, None)
 
 	def _show_freq_menu(self, x, y):
+		if self.fan_rpm_label is not None:
+			self._update_fan_rpm()
 		self._popup(self.freq_menu, x, y)
 
 	def _show_core_menu(self, x, y):
@@ -474,6 +592,8 @@ class MyIndicator(object):
 		for i in self.select_items.values():
 			i.handler_block_by_func(self.select_activated)
 		for i in self.profile_items.values():
+			i.handler_block_by_func(self.select_activated)
+		for i in self.fan_profile_items.values():
 			i.handler_block_by_func(self.select_activated)
 
 		fmin, fmax, governor = cpufreq.get_policy(self.cpus[0])
@@ -518,31 +638,61 @@ class MyIndicator(object):
 			except:
 				pass
 
+		if self.fan_profile_items:
+			try:
+				self.fan_profile_items[fan.get_fan_profile()].set_active(True)
+			except KeyError:
+				pass
+
+		# don't fight the user while they're still dragging the slider
+		if self.fan_scale is not None and self._fan_speed_timeout is None:
+			speed = fan.get_fan_speed()
+			if speed is not None:
+				self.fan_scale.set_value(speed)
+
+		# reading fan speeds is a WMI call per fan on some drivers, so only
+		# do it while someone can actually see the result
+		if self.fan_rpm_label is not None and self.freq_menu.get_visible():
+			self._update_fan_rpm()
+
 		for i in self.select_items.values():
 			i.handler_unblock_by_func(self.select_activated)
 		for i in self.profile_items.values():
 			i.handler_unblock_by_func(self.select_activated)
+		for i in self.fan_profile_items.values():
+			i.handler_unblock_by_func(self.select_activated)
 
 	def select_activated(self, menuitem, select, value):
 		if menuitem.get_active():
-			bus = dbus.SystemBus()
-			proxy = bus.get_object("com.ubuntu.IndicatorCpufreqSelector", "/Selector", introspect=False)
-			cpus = [dbus.UInt32(cpu) for cpu in self.cpus]
-			try:
-				if select == 'frequency':
-					proxy.SetFrequency(cpus, dbus.UInt32(value),
-						dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
-				elif select == 'governor':
-					proxy.SetGovernor(cpus, value,
-						dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
-				else:
-					proxy.SetPlatformProfile(value,
-						dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
-			except dbus.DBusException as e:
-				name = e.get_dbus_name()
-				msg = str(e)
-				if name == 'com.ubuntu.DeviceDriver.PermissionDeniedByPolicy':
-					show_gtk_dialog(msg)
+			self._call_selector(select, value)
+
+	def _call_selector(self, select, value):
+		bus = dbus.SystemBus()
+		proxy = bus.get_object("com.ubuntu.IndicatorCpufreqSelector", "/Selector", introspect=False)
+		cpus = [dbus.UInt32(cpu) for cpu in self.cpus]
+		try:
+			if select == 'frequency':
+				proxy.SetFrequency(cpus, dbus.UInt32(value),
+					dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+			elif select == 'governor':
+				proxy.SetGovernor(cpus, value,
+					dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+			elif select == 'fan_profile':
+				proxy.SetFanProfile(value,
+					dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+			elif select == 'fan_speed':
+				proxy.SetFanSpeed(dbus.UInt32(value),
+					dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+			else:
+				proxy.SetPlatformProfile(value,
+					dbus_interface='com.ubuntu.IndicatorCpufreqSelector')
+		except dbus.DBusException as e:
+			name = e.get_dbus_name()
+			msg = str(e)
+			if name == 'com.ubuntu.DeviceDriver.PermissionDeniedByPolicy':
+				show_gtk_dialog(msg)
+			elif select in ('fan_profile', 'fan_speed'):
+				show_gtk_dialog(e.get_dbus_message() or msg, _("Fan control failed"))
 
 if __name__ == "__main__":
 	ind = MyIndicator()

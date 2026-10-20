@@ -24,7 +24,7 @@ SITE_PACKAGES="$(python3 -c 'import sysconfig; print(sysconfig.get_path("purelib
 
 echo "Installing indicator_cpufreq Python package to $SITE_PACKAGES ..."
 install -d -m755 "$SITE_PACKAGES/indicator_cpufreq"
-install -m644 indicator_cpufreq/__init__.py indicator_cpufreq/cpufreq.py indicator_cpufreq/indicator.py \
+install -m644 indicator_cpufreq/__init__.py indicator_cpufreq/cpufreq.py indicator_cpufreq/fan.py indicator_cpufreq/indicator.py \
 	"$SITE_PACKAGES/indicator_cpufreq/"
 
 echo "Installing executables to /usr/bin ..."
