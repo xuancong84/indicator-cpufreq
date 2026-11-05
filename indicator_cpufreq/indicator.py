@@ -534,13 +534,12 @@ class MyIndicator(object):
 
 	def _sync_freq_selection(self):
 		# Checks whichever frequency menu item is closest to the current
-		# scaling_max_freq. Called once at startup only, not from update_ui's
-		# per-second poll: on intel_pstate/amd-pstate systems scaling_max_freq
-		# itself drifts on its own (EPP/hardware feedback adjusts it even
-		# without the user touching the menu), so re-syncing against it every
-		# poll made the checked item visibly flicker even right after
-		# explicitly picking one. Once the user (or this initial sync) picks
-		# an item, GTK's own radio-group state is left alone and stays put.
+		# scaling_max_freq. Called at startup and each time the left-click
+		# menu opens (so changes made elsewhere, e.g. by another instance or
+		# cpupower, show up), but not from update_ui's per-second poll: on
+		# intel_pstate/amd-pstate systems scaling_max_freq can drift on its
+		# own, and re-syncing every poll made the checked item visibly
+		# flicker while the menu was open.
 		try:
 			fmin, fmax, governor = cpufreq.get_policy(self.cpus[0])
 			closest_freq = min(self.freq_choices, key=lambda f: abs(f - fmax))
@@ -576,6 +575,7 @@ class MyIndicator(object):
 		menu.popup_at_widget(self._anchor_win, Gdk.Gravity.NORTH_WEST, Gdk.Gravity.SOUTH_WEST, None)
 
 	def _show_freq_menu(self, x, y):
+		self._sync_freq_selection()
 		if self.fan_rpm_label is not None:
 			self._update_fan_rpm()
 		self._popup(self.freq_menu, x, y)

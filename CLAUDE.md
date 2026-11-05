@@ -75,8 +75,9 @@ still exists but does **not** install the `data/` D-Bus files — prefer `instal
 - **Polling**: `update_ui` runs every second (`GLib.timeout_add_seconds`) — sets icon level from
   20%-wide bands of the hardware (cpuinfo) min/max range, updates tooltip if `-f`, and re-checks the
   active governor and platform profile. It blocks `select_activated` handlers while doing so, so
-  programmatic `set_active` doesn't fire D-Bus calls. The frequency radio is synced only once at
-  startup (`_sync_freq_selection`) because `scaling_max_freq` drifts on pstate drivers.
+  programmatic `set_active` doesn't fire D-Bus calls. The frequency radio is not synced by the poll
+  (`scaling_max_freq` can drift on pstate drivers, which made it flicker); `_sync_freq_selection`
+  runs only at startup and each time the left-click menu opens (`_show_freq_menu`).
 - At startup, any offline cores are briefly brought online (via the selector) so their hardware
   limits can be read for grouping, then put back offline.
 - Menu actions (`select_activated`, `_core_toggled`) call the selector over the **system** bus; a
